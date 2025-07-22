@@ -1,0 +1,10 @@
+# Beginnings of a Vulkan rendering engine
+
+Created with the help of vkguide.dev
+
+# External Libraries
+
+- VMA (Vulkan Memory Allocator): Header only library for simplified memory allocation
+- Vk-bootstrap: Utility functions that simplify the boilerplate code for getting Vulkan up and running
+- SDL: Used for window creation and user input
+- fmt: String formatting library
