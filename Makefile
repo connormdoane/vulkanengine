@@ -1,7 +1,7 @@
 # Makefile for Vulkan + SDL2 Engine
 
 CXX := g++
-CXXFLAGS := -std=c++20 -Wall -Wextra -g -Isrc
+CXXFLAGS := -std=c++20 -g -Isrc
 LDFLAGS := -lvulkan -lSDL2 -lfmt
 
 SRC_DIR := src
