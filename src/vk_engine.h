@@ -28,6 +28,22 @@ struct FrameData {
   DeletionQueue _deletionQueue;
 };
 
+struct ComputePushConstants {
+  glm::vec4 data1;
+  glm::vec4 data2;
+  glm::vec4 data3;
+  glm::vec4 data4;
+};
+
+struct ComputeEffect {
+  const char* name;
+
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+
+  ComputePushConstants data;
+};
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanEngine {
@@ -76,6 +92,9 @@ public:
 
   VkPipeline _gradientPipeline;
   VkPipelineLayout _gradientPipelineLayout;
+
+  std::vector<ComputeEffect> backgroundEffects;
+  int currentBackgroundEffect{0};
 
   static VulkanEngine& Get();
 
