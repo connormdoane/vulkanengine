@@ -6,7 +6,7 @@
 
 The Makefile is designed for compilation through GCC.
 
-The majority of dependencies are included directly in the source code, the only ones that must be installed globally are the Vulkan SDK and SDL2
+The majority of dependencies are included directly in the source code, the only ones that must be installed globally are the Vulkan SDK, SDL2, and fmt
 
 Currently the engine has only been tested on Arch Linux
 
