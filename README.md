@@ -2,6 +2,27 @@
 
 Created with the help of vkguide.dev
 
+# Dependencies
+
+The Makefile is designed for compilation through GCC.
+
+The majority of dependencies are included directly in the source code, the only ones that must be installed globally are the Vulkan SDK and SDL2
+
+# Usage
+
+To compile and run the engine, first run the build-shader.sh bash script to compile shaders
+
+```
+chmod +x build-shader.sh
+./build-shader.sh
+```
+
+With the shaders built, compile (and run) the engine with make
+
+```
+make run
+```
+
 # External Libraries
 
 - VMA (Vulkan Memory Allocator): Header only library for simplified memory allocation
