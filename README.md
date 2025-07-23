@@ -9,3 +9,4 @@ Created with the help of vkguide.dev
 - SDL: Used for window creation and user input
 - fmt: String formatting library
 - vk\_implementations: Factory functions for Vulkan info structs, from vkguide
+- Dear ImGui 1.90.6: Adds a useful GUI outside of my rendering for debug

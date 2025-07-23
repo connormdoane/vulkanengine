@@ -53,6 +53,11 @@ public:
   std::vector<VkImageView> _swapchainImageViews;
   VkExtent2D _swapchainExtent;
 
+  // Immediate submit structures
+  VkFence _immFence;
+  VkCommandBuffer _immCommandBuffer;
+  VkCommandPool _immCommandPool;
+
   struct SDL_Window* _window{nullptr};
 
   FrameData _frames[FRAME_OVERLAP];
@@ -80,8 +85,11 @@ public:
 
   void draw();
   void draw_background(VkCommandBuffer cmd);
+  void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
   void run();
+
+  void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 private:
   void init_vulkan();
@@ -91,6 +99,7 @@ private:
   void init_descriptors();
   void init_pipelines();
   void init_background_pipelines();
+  void init_imgui();
 
   void create_swapchain(uint32_t width, uint32_t height);
   void destroy_swapchain();
