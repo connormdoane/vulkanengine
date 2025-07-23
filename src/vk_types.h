@@ -26,6 +26,34 @@ struct AllocatedImage {
   VkFormat imageFormat;
 };
 
+struct AllocatedBuffer {
+  VkBuffer buffer;
+  VmaAllocation allocation;
+  VmaAllocationInfo info;
+};
+
+// TODO: HIGHLY optimize, will be used a LOT
+struct Vertex {
+  glm::vec3 position;
+  float uv_x;
+  glm::vec3 normal;
+  float uv_y;
+  glm::vec4 color;
+};
+
+// Holds resources for a mesh
+struct GPUMeshBuffers {
+  AllocatedBuffer indexBuffer;
+  AllocatedBuffer vertexBuffer;
+  VkDeviceAddress vertexBufferAddress;
+};
+
+// Push constants for mest object draws
+struct GPUDrawPushConstants {
+  glm::mat4 worldMatrix;
+  VkDeviceAddress vertexBuffer;
+};
+
 #define VK_CHECK(x)                                                    \
   do {                                                                 \
     VkResult err = x;                                                  \

@@ -97,6 +97,11 @@ public:
   VkPipelineLayout _trianglePipelineLayout;
   VkPipeline _trianglePipeline;
 
+  VkPipelineLayout _meshPipelineLayout;
+  VkPipeline _meshPipeline;
+
+  GPUMeshBuffers rectangle;
+
   std::vector<ComputeEffect> backgroundEffects;
   int currentBackgroundEffect{0};
 
@@ -124,8 +129,15 @@ private:
   void init_pipelines();
   void init_background_pipelines();
   void init_triangle_pipeline();
+  void init_mesh_pipeline();
   void init_imgui();
+  void init_default_data();
 
   void create_swapchain(uint32_t width, uint32_t height);
   void destroy_swapchain();
+
+  AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+  void destroy_buffer(const AllocatedBuffer& buffer);
+
+  GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 };
