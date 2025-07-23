@@ -10,11 +10,11 @@ The majority of dependencies are included directly in the source code, the only 
 
 # Usage
 
-To compile and run the engine, first run the build-shader.sh bash script to compile shaders
+To compile and run the engine, first run the build-shaders.sh bash script to compile shaders
 
 ```
-chmod +x build-shader.sh
-./build-shader.sh
+chmod +x build-shaders.sh
+./build-shaders.sh
 ```
 
 With the shaders built, compile (and run) the engine with make
