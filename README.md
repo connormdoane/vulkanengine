@@ -8,3 +8,4 @@ Created with the help of vkguide.dev
 - Vk-bootstrap: Utility functions that simplify the boilerplate code for getting Vulkan up and running
 - SDL: Used for window creation and user input
 - fmt: String formatting library
+- vk\_implementations: Factory functions for Vulkan info structs, from vkguide
