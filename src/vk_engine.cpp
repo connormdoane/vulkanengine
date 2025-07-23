@@ -299,11 +299,11 @@ void VulkanEngine::init_background_pipelines()
   VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
 
   VkShaderModule gradientShader;
-  if (!vkutil::load_shader_module("shaders/gradient-color.comp.spv", _device, &gradientShader))
+  if (!vkutil::load_shader_module("build/shaders/gradient_color.comp.spv", _device, &gradientShader))
     fmt::print("Error when building the gradient compute shader\n");
 
   VkShaderModule skyShader;
-  if (!vkutil::load_shader_module("shaders/sky.comp.spv", _device, &skyShader))
+  if (!vkutil::load_shader_module("build/shaders/sky.comp.spv", _device, &skyShader))
     fmt::print("Error when building the sky compute shader\n");
 
   VkPipelineShaderStageCreateInfo stageInfo{};
@@ -355,9 +355,59 @@ void VulkanEngine::init_background_pipelines()
   });
 }
 
+void VulkanEngine::init_triangle_pipeline()
+{
+  VkShaderModule triangleFragShader;
+  if (!vkutil::load_shader_module("build/shaders/colored_triangle.frag.spv", _device, &triangleFragShader))
+    fmt::print("Error when building the triangle fragment shader module");
+
+  VkShaderModule triangleVertexShader;
+  if (!vkutil::load_shader_module("build/shaders/colored_triangle.vert.spv", _device, &triangleVertexShader))
+    fmt::print("Error when building the triangle vertex shader module");
+
+  // Build the pipeline layout that controls the inputs/outputs of the shader
+  VkPipelineLayoutCreateInfo pipeline_layout_info = vkinit::pipeline_layout_create_info();
+  VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
+
+  PipelineBuilder pipelineBuilder;
+
+  // Use the triangle layout
+  pipelineBuilder._pipelineLayout = _trianglePipelineLayout;
+  // Connect the vertex and pixel shaders
+  pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader);
+  // Draw triangles
+  pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+  // Fill the triangles
+  pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+  // No backface culling
+  pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+  // No multisampling
+  pipelineBuilder.set_multisampling_none();
+  // No blending
+  pipelineBuilder.disable_blending();
+  // No depth testing
+  pipelineBuilder.disable_depthtest();
+
+  // Connect the image format we will draw into from draw image
+  pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
+  pipelineBuilder.set_depth_format(VK_FORMAT_UNDEFINED);
+
+  _trianglePipeline = pipelineBuilder.build_pipeline(_device);
+
+  // Clean structures
+  vkDestroyShaderModule(_device, triangleFragShader, nullptr);
+  vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
+
+  _mainDeletionQueue.push_function([&]() {
+    vkDestroyPipelineLayout(_device, _trianglePipelineLayout, nullptr);
+    vkDestroyPipeline(_device, _trianglePipeline, nullptr);
+  });
+}
+
 void VulkanEngine::init_pipelines()
 {
   init_background_pipelines();
+  init_triangle_pipeline();
 }
 
 void VulkanEngine::init_imgui()
@@ -515,6 +565,39 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
   vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
 }
 
+void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
+{
+  VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  VkRenderingInfo renderingInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+  vkCmdBeginRendering(cmd, &renderingInfo);
+
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+
+  // Set dynamic viewport and scissor
+  VkViewport viewport = {};
+  viewport.x = 0;
+  viewport.y = 0;
+  viewport.width = _drawExtent.width;
+  viewport.height = _drawExtent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+  VkRect2D scissor = {};
+  scissor.offset.x = 0;
+  scissor.offset.y = 0;
+  scissor.extent.width = _drawExtent.width;
+  scissor.extent.height = _drawExtent.height;
+
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+  // Launch the draw command to draw 3 vertices
+  vkCmdDraw(cmd, 3, 1, 0, 0);
+
+  vkCmdEndRendering(cmd);
+}
+
 void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
 {
   VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(targetImageView, nullptr, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL);
@@ -551,14 +634,19 @@ void VulkanEngine::draw()
 
   VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-  // Convert the swapchain image into a writeable layout
-  vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+  // Transition our draw image into general layout so we can write into it from the pipeline
+  vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
   draw_background(cmd);
 
+  // Transition the draw image into the best format for geometry drawing
+  vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  draw_geometry(cmd);
+
   // Convert the image drawn and the swapchain image into transferrable layouts
-  vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-  vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+  vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
   // Copy from the drawn image to the swapchain image
   vkutil::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);

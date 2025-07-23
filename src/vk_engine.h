@@ -2,6 +2,7 @@
 
 #include <vk_types.h>
 #include <vk_descriptors.h>
+#include <vk_pipelines.h>
 
 struct DeletionQueue {
   std::deque<std::function<void()>> deletors;
@@ -93,6 +94,9 @@ public:
   VkPipeline _gradientPipeline;
   VkPipelineLayout _gradientPipelineLayout;
 
+  VkPipelineLayout _trianglePipelineLayout;
+  VkPipeline _trianglePipeline;
+
   std::vector<ComputeEffect> backgroundEffects;
   int currentBackgroundEffect{0};
 
@@ -105,6 +109,7 @@ public:
   void draw();
   void draw_background(VkCommandBuffer cmd);
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
+  void draw_geometry(VkCommandBuffer cmd);
 
   void run();
 
@@ -118,6 +123,7 @@ private:
   void init_descriptors();
   void init_pipelines();
   void init_background_pipelines();
+  void init_triangle_pipeline();
   void init_imgui();
 
   void create_swapchain(uint32_t width, uint32_t height);
