@@ -1,6 +1,6 @@
 # Beginnings of a Vulkan rendering engine
 
-Created with the help of vkguide.dev
+![A screenshot of the application, showing a shader starry sky background, a gradient triangle polygon, and a Dear ImGui debug window displaying shader settings](screenshot.png?raw=true "Screenshot")
 
 # Dependencies
 
