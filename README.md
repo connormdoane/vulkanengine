@@ -2,6 +2,8 @@
 
 ![A screenshot of the application, showing a shader starry sky background, a gradient triangle polygon, and a Dear ImGui debug window displaying shader settings](screenshot.png?raw=true "Screenshot")
 
+![A screenshot of the application, showing a shader gradient, a lowpoly model of a monkey head made of multicolored triangles, and a Dear ImGui debug window displaying shader settings](screenshot2.png?raw=true "Screenshot2")
+
 # Dependencies
 
 The Makefile is designed for compilation through GCC.
@@ -10,16 +12,7 @@ The majority of dependencies are included directly in the source code, the only 
 
 Currently the engine has only been tested on Arch Linux
 
-# Usage
-
-To compile and run the engine, first run the build-shaders.sh bash script to compile shaders
-
-```
-chmod +x build-shaders.sh
-./build-shaders.sh
-```
-
-With the shaders built, compile (and run) the engine with make
+# Demo
 
 ```
 make run
