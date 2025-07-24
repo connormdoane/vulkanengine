@@ -1,38 +1,44 @@
-# Makefile for Vulkan + SDL2 Engine
+# Compiler and flags
+CXX = g++
+CXXFLAGS = -std=c++20 -g -Isrc
+LDFLAGS = -lvulkan -lSDL2 -lfmt -lsimdjson
 
-CXX := g++
-CXXFLAGS := -std=c++20 -g -Isrc
-LDFLAGS := -lvulkan -lSDL2 -lfmt
+# Directories
+SRC_DIR = src
+BUILD_DIR = build
+TARGET = vulkan_engine
 
-SRC_DIR := src
-BUILD_DIR := build
-BIN := vulkan_engine
+# Source files in src/
+SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRC_FILES))
 
-# Shader setup
-SHADER_DIR := shaders
-SHADER_BUILD_DIR := $(BUILD_DIR)/shaders
-COMP_SHADERS := $(wildcard $(SHADER_DIR)/*.comp)
-SPV_FILES := $(patsubst $(SHADER_DIR)/%.comp,$(SHADER_BUILD_DIR)/%.comp.spv,$(COMP_SHADERS))
+# FastGLTF source files
+FASTGLTF_SRC := fastgltf base64
+FASTGLTF_OBJS := $(addprefix $(BUILD_DIR)/fastgltf_, $(addsuffix .o, $(FASTGLTF_SRC)))
 
-SRCS := $(wildcard $(SRC_DIR)/*.cpp)
-OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
+# Default target
+all: $(TARGET)
+	./build-shaders.sh
 
-$(BIN): $(OBJS)
+# Link everything into the final binary
+$(TARGET): $(OBJ_FILES) $(FASTGLTF_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
+# Compile regular engine source files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
-	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Shader compilation rules
-$(SHADER_BUILD_DIR)/%.comp.spv: $(SHADER_DIR)/%.comp
-	@mkdir -p $(SHADER_BUILD_DIR)
-	glslangValidator -V $< -o $@
+# Compile FastGLTF source files (manually listed)
+$(BUILD_DIR)/fastgltf_%.o: $(SRC_DIR)/fastgltf/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-.PHONY: clean run
+# Create build directory if it doesn't exist
+$(shell mkdir -p $(BUILD_DIR))
 
-run: $(BIN)
-	./$(BIN)
+# Run target
+run: all
+	./$(TARGET)
 
+# Clean target
 clean:
-	rm -rf $(BUILD_DIR) $(BIN)
+	rm -f $(BUILD_DIR)/*.o $(TARGET)

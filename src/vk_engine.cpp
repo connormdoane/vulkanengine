@@ -13,6 +13,9 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/transform.hpp>
+
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
@@ -176,7 +179,7 @@ void VulkanEngine::init_swapchain()
 {
   create_swapchain(_windowExtent.width, _windowExtent.height);
 
-  // Draw image size that will fit window
+  // DRAW IMAGE
   VkExtent3D drawImageExtent = {
     _windowExtent.width,
     _windowExtent.height,
@@ -208,10 +211,29 @@ void VulkanEngine::init_swapchain()
 
   VK_CHECK(vkCreateImageView(_device, &rview_info, nullptr, &_drawImage.imageView));
 
+  // DEPTH IMAGE
+  _depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+  _depthImage.imageExtent = drawImageExtent;
+  VkImageUsageFlags depthImageUsages{};
+  depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+  VkImageCreateInfo dimg_info = vkinit::image_create_info(_depthImage.imageFormat, depthImageUsages, drawImageExtent);
+
+  // Allocate and create the image
+  vmaCreateImage(_allocator, &dimg_info, &rimg_allocinfo, &_depthImage.image, &_depthImage.allocation, nullptr);
+
+  // Build an imageview for the draw image to use during rendering
+  VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  VK_CHECK(vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
+
   // add to deletion queues
   _mainDeletionQueue.push_function([this]() {
     vkDestroyImageView(_device, _drawImage.imageView, nullptr);
     vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
+
+    vkDestroyImageView(_device, _depthImage.imageView, nullptr);
+    vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
   });
 }
 
@@ -380,55 +402,6 @@ void VulkanEngine::init_background_pipelines()
   });
 }
 
-void VulkanEngine::init_triangle_pipeline()
-{
-  VkShaderModule triangleFragShader;
-  if (!vkutil::load_shader_module("build/shaders/colored_triangle.frag.spv", _device, &triangleFragShader))
-    fmt::print("Error when building the triangle fragment shader module");
-
-  VkShaderModule triangleVertexShader;
-  if (!vkutil::load_shader_module("build/shaders/colored_triangle.vert.spv", _device, &triangleVertexShader))
-    fmt::print("Error when building the triangle vertex shader module");
-
-  // Build the pipeline layout that controls the inputs/outputs of the shader
-  VkPipelineLayoutCreateInfo pipeline_layout_info = vkinit::pipeline_layout_create_info();
-  VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
-
-  PipelineBuilder pipelineBuilder;
-
-  // Use the triangle layout
-  pipelineBuilder._pipelineLayout = _trianglePipelineLayout;
-  // Connect the vertex and pixel shaders
-  pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader);
-  // Draw triangles
-  pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  // Fill the triangles
-  pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
-  // No backface culling
-  pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-  // No multisampling
-  pipelineBuilder.set_multisampling_none();
-  // No blending
-  pipelineBuilder.disable_blending();
-  // No depth testing
-  pipelineBuilder.disable_depthtest();
-
-  // Connect the image format we will draw into from draw image
-  pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
-  pipelineBuilder.set_depth_format(VK_FORMAT_UNDEFINED);
-
-  _trianglePipeline = pipelineBuilder.build_pipeline(_device);
-
-  // Clean structures
-  vkDestroyShaderModule(_device, triangleFragShader, nullptr);
-  vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
-
-  _mainDeletionQueue.push_function([&]() {
-    vkDestroyPipelineLayout(_device, _trianglePipelineLayout, nullptr);
-    vkDestroyPipeline(_device, _trianglePipeline, nullptr);
-  });
-}
-
 void VulkanEngine::init_mesh_pipeline()
 {
   VkShaderModule triangleFragShader;
@@ -467,12 +440,13 @@ void VulkanEngine::init_mesh_pipeline()
   pipelineBuilder.set_multisampling_none();
   // No blending
   pipelineBuilder.disable_blending();
-  // No depth testing
-  pipelineBuilder.disable_depthtest();
+  // Enable depth testing
+  // pipelineBuilder.disable_depthtest();
+  pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
   // Connect the image format we will draw into from draw image
   pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
-  pipelineBuilder.set_depth_format(VK_FORMAT_UNDEFINED);
+  pipelineBuilder.set_depth_format(_depthImage.imageFormat);
 
   _meshPipeline = pipelineBuilder.build_pipeline(_device);
 
@@ -492,7 +466,6 @@ void VulkanEngine::init_pipelines()
   init_background_pipelines();
 
   // Graphics
-  init_triangle_pipeline();
   init_mesh_pipeline();
 }
 
@@ -556,34 +529,7 @@ void VulkanEngine::init_imgui()
 
 void VulkanEngine::init_default_data()
 {
-  std::array<Vertex,4> rect_vertices;
-
-  rect_vertices[0].position = { 0.5,-0.5, 0.0};
-  rect_vertices[1].position = { 0.5, 0.5, 0.0};
-  rect_vertices[2].position = {-0.5,-0.5, 0.0};
-  rect_vertices[3].position = {-0.5, 0.5, 0.0};
-
-  rect_vertices[0].color = { 0.0, 0.0, 0.0, 1.0};
-  rect_vertices[1].color = { 0.5, 0.5, 0.5, 1.0};
-  rect_vertices[2].color = { 1.0, 0.0, 0.0, 1.0};
-  rect_vertices[3].color = { 0.0, 1.0, 0.0, 1.0};
-
-  std::array<uint32_t,6> rect_indices;
-
-  rect_indices[0] = 0;
-  rect_indices[1] = 1;
-  rect_indices[2] = 2;
-
-  rect_indices[3] = 2;
-  rect_indices[4] = 1;
-  rect_indices[5] = 3;
-
-  rectangle = uploadMesh(rect_indices, rect_vertices);
-
-  _mainDeletionQueue.push_function([&]() {
-    destroy_buffer(rectangle.indexBuffer);
-    destroy_buffer(rectangle.vertexBuffer);
-  });
+  testMeshes = loadGltfMeshes(this, "assets/basicmesh.glb").value();
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
@@ -639,6 +585,11 @@ void VulkanEngine::cleanup()
     _frames[i]._deletionQueue.flush();
   }
 
+  for (auto& mesh : testMeshes) {
+    destroy_buffer(mesh->meshBuffers.indexBuffer);
+    destroy_buffer(mesh->meshBuffers.vertexBuffer);
+  }
+  
   _mainDeletionQueue.flush();
 
   destroy_swapchain();
@@ -732,11 +683,12 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 {
-  VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  VkRenderingInfo renderingInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
-  vkCmdBeginRendering(cmd, &renderingInfo);
+  VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+  VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+  VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
+  vkCmdBeginRendering(cmd, &renderInfo);
 
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
   // Set dynamic viewport and scissor
   VkViewport viewport = {};
@@ -757,19 +709,29 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-  // Launch the draw command to draw 3 vertices
-  vkCmdDraw(cmd, 3, 1, 0, 0);
-
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
-
   GPUDrawPushConstants push_constants;
   push_constants.worldMatrix = glm::mat4{ 1.f };
-  push_constants.vertexBuffer = rectangle.vertexBufferAddress;
+  push_constants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
+
+  // glm::mat4 model = glm::mat4{ 1.f };
+  // glm::mat4 view = glm::translate(glm::mat4{ 1.f }, glm::vec3{ 0, 0,-5 });
+  // // camera projection
+  // glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
+  glm::mat4 model = glm::mat4{ 1.f };
+  glm::mat4 view = glm::translate(glm::mat4{ 1.f }, glm::vec3{ 0,0,-5 });
+  glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, .1f, 10000.f);
+
+  // Invert the Y-direction on projection matrix to match opengl and gltf axis
+  projection[1][1] *= -1;
+  // projection[2][2] = 0.0f;
+  // projection[3][2] = -1.0f;
+
+  push_constants.worldMatrix = projection * view * model;
 
   vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
-  vkCmdBindIndexBuffer(cmd, rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+  vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-  vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+  vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
   vkCmdEndRendering(cmd);
 }
@@ -791,7 +753,9 @@ void VulkanEngine::draw()
   // Wait for the GPU to signal it's finished drawing the previous frame
   // Timeout of 1 second
   VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
+
   get_current_frame()._deletionQueue.flush();
+
   VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
 
   // Request an image from the swapchain
@@ -799,8 +763,10 @@ void VulkanEngine::draw()
   VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex));
 
   // Commands are done executing, so we can reset it to record again
+  // VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
+  VK_CHECK(vkResetCommandBuffer(get_current_frame()._mainCommandBuffer, 0));
+
   VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
-  VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
   // We'll only use this command buffer once, so set that flag and then begin recording
   VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -817,6 +783,7 @@ void VulkanEngine::draw()
 
   // Transition the draw image into the best format for geometry drawing
   vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
   draw_geometry(cmd);
 
@@ -857,9 +824,8 @@ void VulkanEngine::draw()
 
   // Finally, we put the image just rendered into the window
   // We have to wait on the _renderSemaphore for this, since the image needs to be rendered before it can be displayed
-  VkPresentInfoKHR presentInfo = {};
-  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  presentInfo.pNext = nullptr;
+  VkPresentInfoKHR presentInfo = vkinit::present_info();
+
   presentInfo.pSwapchains = &_swapchain;
   presentInfo.swapchainCount = 1;
     
