@@ -36,7 +36,7 @@ void VulkanEngine::init()
 
   SDL_Init(SDL_INIT_VIDEO);
 
-  SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
+  SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
   _window = SDL_CreateWindow("Vulkan Engine",
                              SDL_WINDOWPOS_UNDEFINED,
@@ -175,14 +175,31 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
   _swapchainImageViews = vkbSwapchain.get_image_views().value();
 }
 
+void VulkanEngine::resize_swapchain()
+{
+  vkDeviceWaitIdle(_device);
+
+  destroy_swapchain();
+
+  int w, h;
+  SDL_GetWindowSize(_window, &w, &h);
+  _windowExtent.width = w;
+  _windowExtent.height = h;
+  printf("Resizing swapchain (%d, %d)\n", w, h);
+
+  create_swapchain(_windowExtent.width, _windowExtent.height);
+
+  resize_requested = false;
+}
+
 void VulkanEngine::init_swapchain()
 {
   create_swapchain(_windowExtent.width, _windowExtent.height);
 
   // DRAW IMAGE
   VkExtent3D drawImageExtent = {
-    _windowExtent.width,
-    _windowExtent.height,
+    1920,
+    1080,
     1
   };
 
@@ -721,7 +738,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
   // glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
   glm::mat4 model = glm::mat4{ 1.f };
   glm::mat4 view = glm::translate(glm::mat4{ 1.f }, glm::vec3{ 0,0,-5 });
-  glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, .1f, 10000.f);
+  glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, .1f, 100.f);
 
   // Invert the Y-direction on projection matrix to match opengl and gltf axis
   projection[1][1] *= -1;
@@ -758,23 +775,27 @@ void VulkanEngine::draw()
 
   get_current_frame()._deletionQueue.flush();
 
-  VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
-
   // Request an image from the swapchain
   uint32_t swapchainImageIndex;
-  VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex));
+
+  VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex);
+  if (e == VK_ERROR_OUT_OF_DATE_KHR) {
+    resize_requested = true;
+    return;
+  }
+
+  _drawExtent.width = std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale;
+  _drawExtent.height = std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale;
+
+  VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
 
   // Commands are done executing, so we can reset it to record again
-  // VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
   VK_CHECK(vkResetCommandBuffer(get_current_frame()._mainCommandBuffer, 0));
 
   VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
 
   // We'll only use this command buffer once, so set that flag and then begin recording
   VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-  _drawExtent.width = _drawImage.imageExtent.width;
-  _drawExtent.height = _drawImage.imageExtent.height;
 
   VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
@@ -836,7 +857,10 @@ void VulkanEngine::draw()
 
   presentInfo.pImageIndices = &swapchainImageIndex;
   
-  VK_CHECK(vkQueuePresentKHR(_graphicsQueue, &presentInfo));
+  VkResult presentResult = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
+  if (presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+    resize_requested = true;
+  }
 
   // Increase the number of frames drawn
   _frameNumber++;
@@ -864,6 +888,11 @@ void VulkanEngine::run()
       ImGui_ImplSDL2_ProcessEvent(&e);
     }
 
+    if (resize_requested) {
+      resize_swapchain();
+      // resize_requested = false;
+    }
+
     if (stop_rendering) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       continue;
@@ -876,6 +905,7 @@ void VulkanEngine::run()
 
     // Some imgui UI for selecting shader
     if (ImGui::Begin("background")) {
+      ImGui::SliderFloat("Render Scale", &renderScale, 0.3f, 1.f);
       ComputeEffect& selected = backgroundEffects[currentBackgroundEffect];
 
       ImGui::Text("Selected effect: %s", selected.name);
