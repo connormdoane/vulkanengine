@@ -4,6 +4,7 @@
 #include <vk_descriptors.h>
 #include <vk_pipelines.h>
 #include <vk_loader.h>
+#include <camera.h>
 
 struct DeletionQueue {
   std::deque<std::function<void()>> deletors;
@@ -28,6 +29,7 @@ struct FrameData {
   VkFence _renderFence;
 
   DeletionQueue _deletionQueue;
+  DescriptorAllocatorGrowable _frameDescriptors;
 };
 
 struct ComputePushConstants {
@@ -44,6 +46,67 @@ struct ComputeEffect {
   VkPipelineLayout layout;
 
   ComputePushConstants data;
+};
+
+struct GPUSceneData {
+  glm::mat4 view;
+  glm::mat4 proj;
+  glm::mat4 viewproj;
+  glm::vec4 ambientColor;
+  glm::vec4 sunlightDirection;
+  glm::vec4 sunlightColor;
+};
+
+struct RenderObject {
+  uint32_t indexCount;
+  uint32_t firstIndex;
+  VkBuffer indexBuffer;
+
+  MaterialInstance* material;
+
+  glm::mat4 transform;
+  VkDeviceAddress vertexBufferAddress;
+};
+
+struct DrawContext {
+  std::vector<RenderObject> OpaqueSurfaces;
+};
+
+struct GLTFMetallic_Roughness {
+  MaterialPipeline opaquePipeline;
+  MaterialPipeline transparentPipeline;
+
+  VkDescriptorSetLayout materialLayout;
+
+  struct MaterialConstants {
+    glm::vec4 colorFactors;
+    glm::vec4 metal_rough_factors;
+    // For alignment, bind a uniform buffer that is 256 bytes, so add some padding to meet that size
+    glm::vec4 extra[14];
+  };
+
+  struct MaterialResources {
+    AllocatedImage colorImage;
+    VkSampler colorSampler;
+    AllocatedImage metalRoughImage;
+    VkSampler metalRoughSampler;
+    VkBuffer dataBuffer;
+    uint32_t dataBufferOffset;
+  };
+
+  DescriptorWriter writer;
+
+  void build_pipelines(VulkanEngine* engine);
+  void clear_resources(VkDevice device);
+
+  MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources,
+                                  DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
+struct MeshNode : public Node {
+  std::shared_ptr<MeshAsset> mesh;
+
+  virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -90,13 +153,32 @@ public:
   VkExtent2D _drawExtent;
   float renderScale = 1.f;
 
-  DescriptorAllocator globalDescriptorAllocator;
+  AllocatedImage _whiteImage;
+  AllocatedImage _blackImage;
+  AllocatedImage _grayImage;
+  AllocatedImage _errorCheckerboardImage;
+
+  MaterialInstance defaultData;
+  GLTFMetallic_Roughness metalRoughMaterial;
+
+  VkSampler _defaultSamplerLinear;
+  VkSampler _defaultSamplerNearest;
+
+  DescriptorAllocatorGrowable globalDescriptorAllocator;
 
   VkDescriptorSet _drawImageDescriptors;
   VkDescriptorSetLayout _drawImageDescriptorLayout;
 
+  GPUSceneData sceneData;
+  VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+
+  VkDescriptorSetLayout _singleImageDescriptorLayout;
+
   VkPipeline _gradientPipeline;
   VkPipelineLayout _gradientPipelineLayout;
+
+  VkPipelineLayout _trianglePipelineLayout;
+  VkPipeline _trianglePipeline;
 
   VkPipelineLayout _meshPipelineLayout;
   VkPipeline _meshPipeline;
@@ -105,6 +187,11 @@ public:
 
   std::vector<ComputeEffect> backgroundEffects;
   int currentBackgroundEffect{0};
+
+  DrawContext mainDrawContext;
+  std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+  Camera mainCamera;
 
   static VulkanEngine& Get();
 
@@ -116,6 +203,8 @@ public:
   void draw_background(VkCommandBuffer cmd);
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
   void draw_geometry(VkCommandBuffer cmd);
+
+  void update_scene();
 
   void run();
 
@@ -132,12 +221,17 @@ private:
   void init_pipelines();
   void init_background_pipelines();
   void init_mesh_pipeline();
+  void init_triangle_pipeline();
   void init_imgui();
   void init_default_data();
 
   void create_swapchain(uint32_t width, uint32_t height);
   void resize_swapchain();
   void destroy_swapchain();
+
+  AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+  AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+  void destroy_image(const AllocatedImage& img);
 
   AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
   void destroy_buffer(const AllocatedBuffer& buffer);

@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++20 -g -Isrc
+CXXFLAGS = -std=c++20 -g -Isrc -DGLM_FORCE_DEPTH_ZERO_TO_ONE
 LDFLAGS = -lvulkan -lSDL2 -lfmt -lsimdjson
 
 # Directories
