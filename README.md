@@ -4,6 +4,8 @@
 
 ![A screenshot of the application, showing a shader gradient, a lowpoly model of a monkey head made of multicolored triangles, and a Dear ImGui debug window displaying shader settings](screenshot2.png?raw=true "Screenshot2")
 
+![A screenshot of the application, showing a shader gradient, a lowpoly model of a monkey head made of metallic rough triangles, and a Dear ImGui debug window displaying shader settings](screenshot3.png?raw=true "Screenshot3")
+
 # Dependencies
 
 The Makefile is designed for compilation through GCC.
