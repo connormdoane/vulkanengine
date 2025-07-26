@@ -64,9 +64,16 @@ void VulkanEngine::init()
   init_default_data();
 
   mainCamera.velocity = glm::vec3(0.f);
-  mainCamera.position = glm::vec3(0,0,5);
+  mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
   mainCamera.pitch = 0;
   mainCamera.yaw = 0;
+
+  std::string structurePath = { "assets/structure.glb" };
+  auto structureFile = loadGltf(this, structurePath);
+
+  assert(structureFile.has_value());
+
+  loadedScenes["structure"] = *structureFile;
 
   _isInitialized = true;
 }
@@ -914,6 +921,8 @@ void VulkanEngine::cleanup()
   // Ensure the GPU is done working
   vkDeviceWaitIdle(_device);
 
+  loadedScenes.clear();
+
   for (unsigned int i = 0; i < FRAME_OVERLAP; i++) {
     vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
 
@@ -1053,21 +1062,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
   // Draw triangle
   // vkCmdDraw(cmd, 3, 1, 0, 0);
 
-  // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
-
-  // // Bind a texture
-  // VkDescriptorSet imageSet = get_current_frame()._frameDescriptors.allocate(_device, _singleImageDescriptorLayout);
-  // {
-  //   DescriptorWriter writer;
-  //   writer.write_image(0, _errorCheckerboardImage.imageView, _defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-  //                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-  //   writer.update_set(_device, imageSet);
-  // }
-
-  // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
-
-  // // Allocate a uniform buffer for the scene data
+  // Allocate a uniform buffer for the scene data
   AllocatedBuffer gpuSceneDataBuffer = create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
   
   // Add it to the deletion queue
@@ -1084,7 +1079,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
   writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   writer.update_set(_device, globalDescriptor);
 
-  for (const RenderObject& draw : mainDrawContext.OpaqueSurfaces) {
+  auto draw = [&](const RenderObject& draw) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1, &globalDescriptor, 0, nullptr);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1, &draw.material->materialSet, 0, nullptr);
@@ -1097,6 +1092,14 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     vkCmdPushConstants(cmd, draw.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 
     vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+  };
+
+  for (auto& r : mainDrawContext.OpaqueSurfaces) {
+    draw(r);
+  }
+
+  for (auto& r : mainDrawContext.TransparentSurfaces) {
+    draw(r);
   }
 
   vkCmdEndRendering(cmd);
@@ -1137,18 +1140,20 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 void VulkanEngine::update_scene()
 {
   mainDrawContext.OpaqueSurfaces.clear();
+  mainDrawContext.TransparentSurfaces.clear();
 
-  loadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, mainDrawContext);
+  // loadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, mainDrawContext);
+
   // for (auto& m : loadedNodes) {
   //   m.second->Draw(glm::mat4{1.f}, mainDrawContext);
   // }
-
   // for (int x = -3; x < 3; x++) {
   //   glm::mat4 scale = glm::scale(glm::vec3{0.2});
   //   glm::mat4 translation = glm::translate(glm::vec3{x, 1, 0});
-
   //   loadedNodes["Cube"]->Draw(translation * scale, mainDrawContext);
   // }
+
+  loadedScenes["structure"]->Draw(glm::mat4{ 1.f }, mainDrawContext);
 
   mainCamera.update();
 

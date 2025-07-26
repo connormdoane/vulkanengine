@@ -70,6 +70,7 @@ struct RenderObject {
 
 struct DrawContext {
   std::vector<RenderObject> OpaqueSurfaces;
+  std::vector<RenderObject> TransparentSurfaces;
 };
 
 struct GLTFMetallic_Roughness {
@@ -193,6 +194,8 @@ public:
 
   Camera mainCamera;
 
+  std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
+
   static VulkanEngine& Get();
 
   void init();
@@ -212,6 +215,13 @@ public:
 
   GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
+  AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+  AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+  void destroy_image(const AllocatedImage& img);
+
+  AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+  void destroy_buffer(const AllocatedBuffer& buffer);
+
 private:
   void init_vulkan();
   void init_swapchain(); 
@@ -229,11 +239,5 @@ private:
   void resize_swapchain();
   void destroy_swapchain();
 
-  AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-  AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-  void destroy_image(const AllocatedImage& img);
-
-  AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-  void destroy_buffer(const AllocatedBuffer& buffer);
 
 };
