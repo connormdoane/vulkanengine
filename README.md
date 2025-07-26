@@ -18,6 +18,8 @@ Currently the engine has only been tested on Arch Linux
 make BUILD=release run
 ```
 
+During the demo, use the mouse to look around and use WASDQE to move the camera
+
 # External Libraries
 
 - VMA (Vulkan Memory Allocator): Header only library for simplified memory allocation
