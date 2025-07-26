@@ -112,6 +112,14 @@ struct MeshNode : public Node {
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
+struct EngineStats {
+  float frametime;
+  int triangle_count;
+  int drawcall_count;
+  float scene_update_time;
+  float mesh_draw_time;
+};
+
 class VulkanEngine {
 public:
   bool _isInitialized{false};
@@ -119,6 +127,7 @@ public:
   bool stop_rendering{false};
   bool resize_requested;
   VkExtent2D _windowExtent{1700,900};
+  EngineStats stats;
 
   DeletionQueue _mainDeletionQueue;
   VmaAllocator _allocator;

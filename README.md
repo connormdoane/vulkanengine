@@ -1,10 +1,6 @@
-# Beginnings of a Vulkan rendering engine
-
-![A screenshot of the application, showing a shader starry sky background, a gradient triangle polygon, and a Dear ImGui debug window displaying shader settings](screenshot.png?raw=true "Screenshot")
+# A Vulkan rendering engine
 
 ![A screenshot of the application, showing a shader gradient, a lowpoly model of a monkey head made of multicolored triangles, and a Dear ImGui debug window displaying shader settings](screenshot2.png?raw=true "Screenshot2")
-
-![A screenshot of the application, showing a shader gradient, a lowpoly model of a monkey head made of metallic rough triangles, and a Dear ImGui debug window displaying shader settings](screenshot3.png?raw=true "Screenshot3")
 
 ![A screenshot of the application, showing a space station GLTF Scene, and a Dear ImGui debug window displaying shader settings](screenshot4.png?raw=true "Screenshot4")
 
@@ -19,7 +15,7 @@ Currently the engine has only been tested on Arch Linux
 # Demo
 
 ```
-make run
+make BUILD=release run
 ```
 
 # External Libraries

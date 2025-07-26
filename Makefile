@@ -1,11 +1,16 @@
 # Compiler and flags
+BUILD ?= debug
 CXX = g++
-CXXFLAGS = -std=c++20 -g -Isrc -DGLM_FORCE_DEPTH_ZERO_TO_ONE
+ifeq ($(BUILD),release)
+	CXXFLAGS = -std=c++20 -O3 -DNDEBUG -Isrc -DGLM_FORCE_DEPTH_ZERO_TO_ONE
+else
+	CXXFLAGS = -std=c++20 -g -O0 -Isrc -DGLM_FORCE_DEPTH_ZERO_TO_ONE
+endif
 LDFLAGS = -lvulkan -lSDL2 -lfmt -lsimdjson
 
 # Directories
 SRC_DIR = src
-BUILD_DIR = build
+BUILD_DIR = build/$(BUILD)
 TARGET = vulkan_engine
 
 # Source files in src/
