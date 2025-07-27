@@ -14,7 +14,10 @@ for shader in shaders/*.{comp,frag,vert}; do
     # Output filename: foo.vert.spv
     output="build/shaders/$filename.spv"
 
-    echo "Compiling $shader -> $output"
-    glslangValidator -V "$shader" -o "$output"
+    # Check if the output doesn't exist or is older than the source
+    if [ ! -f "$output" ] || [ "$shader" -nt "$output" ]; then
+        echo "Compiling $shader -> $output"
+        glslangValidator -V "$shader" -o "$output"
+    fi
 done
 
